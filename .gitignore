@@ -17,8 +17,8 @@ build/
 # Data files (too large for GitHub)
 data/
 
-# Trained model files (too large for GitHub — retrain locally)
-model/*.pkl
+# Trained model files — kept in repo for Streamlit Cloud deployment
+# model/*.pkl   ← intentionally tracked (files are < 1 MB each)
 
 # Environment variables
 .env
