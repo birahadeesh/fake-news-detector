@@ -239,7 +239,9 @@ def clean_text(text: str) -> str:
 
 
 def get_gemini_client():
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    # Streamlit Cloud: set via App Settings → Secrets
+    # Local dev: set via $env:GEMINI_API_KEY
+    api_key = st.secrets.get("GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         return None
     try:
