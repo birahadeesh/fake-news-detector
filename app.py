@@ -5,6 +5,7 @@ import time
 
 import joblib
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Hybrid AI Fake News Intelligence System",
@@ -246,22 +247,47 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #e2e8f0; }
 .dot-red    { width:7px;height:7px;border-radius:50%;background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.7);flex-shrink:0; }
 
 /* ══ FEATURE CARDS ═══════════════════════════════════════════════ */
+@keyframes cardFloat {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-6px); }
+}
+
 .feat-grid  { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.8rem; }
 .feat-card  {
     position:relative; background:rgba(15,23,42,.65);
-    border:1px solid rgba(99,102,241,.14); border-radius:18px;
+    border:1px solid rgba(99,102,241,.15); border-radius:18px;
     padding:1.3rem 1.2rem; text-align:center;
     backdrop-filter:blur(18px);
-    transition:transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+    animation: cardFloat 7s ease-in-out infinite;
+    transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
     overflow:hidden; cursor:default;
 }
+/* Staggered float start so cards drift independently */
+.feat-card:nth-child(1) { animation-delay: 0s; }
+.feat-card:nth-child(2) { animation-delay: 2.3s; }
+.feat-card:nth-child(3) { animation-delay: 4.6s; }
+
 .feat-card::after {
     content:''; position:absolute; inset:0; border-radius:18px;
     background:linear-gradient(135deg,rgba(99,102,241,.06) 0%,transparent 55%);
     pointer-events:none;
 }
-.feat-card:hover { transform:translateY(-5px); border-color:rgba(99,102,241,.4); box-shadow:0 18px 44px rgba(99,102,241,.11); }
-.feat-icon { font-size:1.75rem; margin-bottom:.55rem; display:block; }
+.feat-card:hover {
+    transform:translateY(-5px) !important;
+    border-color:rgba(129,140,248,.4);
+    box-shadow: 0 24px 56px rgba(99,102,241,.12), 0 0 0 1px rgba(129,140,248,.08);
+    animation-play-state: paused;
+}
+
+/* Icon micro-animation on card hover */
+.feat-card .feat-icon {
+    font-size:1.75rem; margin-bottom:.55rem; display:block;
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.feat-card:hover .feat-icon {
+    transform: scale(1.03) rotate(2deg);
+}
+
 .feat-name { font-size:.82rem; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:1.1px; margin-bottom:.28rem; }
 .feat-desc { font-size:.82rem; color:#94a3b8; line-height:1.55; }
 
@@ -384,9 +410,90 @@ div[data-testid="stButton"] > button[kind="primary"]:hover {
 .site-footer { text-align:center; padding:1.2rem 0 .8rem; }
 .site-footer p { font-size:.76rem; color:#334155; line-height:2; letter-spacing:.3px; }
 .site-footer span { color:#475569; font-weight:600; }
+/* ══ CUSTOM CURSOR ═══════════════════════════════════════════════ */
+* { cursor: none !important; }
+#cursor-dot {
+    position: fixed; width:6px; height:6px;
+    background: #a5b4fc;
+    border-radius: 50%;
+    pointer-events: none; z-index: 999999;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 6px rgba(165,180,252,0.8);
+}
+#cursor-ring {
+    position: fixed; width:36px; height:36px;
+    border: 2px solid rgba(165,180,252,0.75);
+    border-radius: 50%;
+    pointer-events: none; z-index: 999998;
+    transform: translate(-50%,-50%);
+    background: rgba(99,102,241,0.04);
+    box-shadow: 0 0 16px rgba(129,140,248,0.3), inset 0 0 8px rgba(129,140,248,0.06);
+    transition: width 0.3s cubic-bezier(0.22,1,0.36,1),
+                height 0.3s cubic-bezier(0.22,1,0.36,1),
+                border-color 0.3s ease,
+                box-shadow 0.3s ease,
+                background 0.3s ease;
+}
+#cursor-ring.hovering {
+    width: 52px; height: 52px;
+    border-color: rgba(192,132,252,0.85);
+    background: rgba(139,92,246,0.06);
+    box-shadow: 0 0 24px rgba(192,132,252,0.35), 0 0 8px rgba(192,132,252,0.15), inset 0 0 12px rgba(139,92,246,0.08);
+}
 </style>
 """, unsafe_allow_html=True)
 
+# ── Custom cursor follower (JS via parent document access) ─────────
+components.html("""
+<script>
+(function() {
+    const doc = window.parent.document;
+
+    // Create elements only once
+    if (!doc.getElementById('cursor-dot')) {
+        const dot = doc.createElement('div');
+        dot.id = 'cursor-dot';
+        doc.body.appendChild(dot);
+    }
+    if (!doc.getElementById('cursor-ring')) {
+        const ring = doc.createElement('div');
+        ring.id = 'cursor-ring';
+        doc.body.appendChild(ring);
+    }
+
+    let mx = 0, my = 0, rx = 0, ry = 0;
+    const lerp = 0.10; // lag factor — lower = more delay
+
+    doc.addEventListener('mousemove', (e) => {
+        mx = e.clientX;
+        my = e.clientY;
+        const dot = doc.getElementById('cursor-dot');
+        if (dot) { dot.style.left = mx + 'px'; dot.style.top = my + 'px'; }
+    });
+
+    // Hover detection
+    const SELECTORS = '.feat-card,.kpi-tile,.panel,.result-card,button,a,.input-card';
+    doc.addEventListener('mouseover', (e) => {
+        const ring = doc.getElementById('cursor-ring');
+        if (ring && e.target.closest(SELECTORS)) ring.classList.add('hovering');
+    });
+    doc.addEventListener('mouseout', (e) => {
+        const ring = doc.getElementById('cursor-ring');
+        if (ring && e.target.closest(SELECTORS)) ring.classList.remove('hovering');
+    });
+
+    // Smooth animation loop
+    function tick() {
+        rx += (mx - rx) * lerp;
+        ry += (my - ry) * lerp;
+        const ring = doc.getElementById('cursor-ring');
+        if (ring) { ring.style.left = rx + 'px'; ring.style.top = ry + 'px'; }
+        window.parent.requestAnimationFrame(tick);
+    }
+    tick();
+})();
+</script>
+""", height=0)
 
 # ── Backend — logic unchanged ──────────────────────────────────────
 @st.cache_resource(show_spinner=False)
