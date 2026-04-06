@@ -821,12 +821,12 @@ with live_col:
         <p style='font-size:1.45rem;font-weight:900;letter-spacing:-0.5px;
                   background:linear-gradient(135deg,#bfdbfe 0%,#a5b4fc 50%,#c084fc 100%);
                   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                  background-clip:text;margin-bottom:.3rem;'>\ud83d\udcf0 Live News Analysis</p>
-        <p style='font-size:.88rem;color:#475569;'>Fetch today\u2019s top headlines and run instant credibility checks.</p>
+                  background-clip:text;margin-bottom:.3rem;'>&#128240; Live News Analysis</p>
+        <p style='font-size:.88rem;color:#475569;'>Fetch today's top headlines and run instant credibility checks.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    fetch_btn = st.button("\ud83d\udd04 Fetch Latest News", use_container_width=True)
+    fetch_btn = st.button("🔄 Fetch Latest News", use_container_width=True)
 
     if "live_articles" not in st.session_state:
         st.session_state.live_articles = []
@@ -834,32 +834,36 @@ with live_col:
         st.session_state.live_result = {}
 
     if fetch_btn:
-        with st.spinner("\ud83d\udce1 Pulling latest headlines from news feeds\u2026"):
+        with st.spinner("Pulling latest headlines from news feeds..."):
             articles = fetch_latest_news()
         if not articles:
-            st.warning("\u26a0\ufe0f Could not fetch headlines right now. Please try again in a moment.", icon="\u26a0\ufe0f")
+            st.warning("Could not fetch headlines right now. Please try again in a moment.", icon="⚠️")
         else:
             st.session_state.live_articles = articles
             st.session_state.live_result   = {}
 
     if st.session_state.live_articles:
-        st.markdown("<div class='sec-lbl' style='margin-bottom:.8rem'>Today\u2019s Headlines</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sec-lbl' style='margin-bottom:.8rem'>Today's Headlines</div>", unsafe_allow_html=True)
         for idx, art in enumerate(st.session_state.live_articles):
             with st.container():
+                title_display = art["title"][:90] + "..." if len(art["title"]) > 90 else art["title"]
+                desc_display  = art["description"][:180] + "..." if len(art["description"]) > 180 else (art["description"] or "<em style='color:#334155'>No description available.</em>")
+                source_prefix = art["source"] + " &nbsp;&middot;&nbsp; " if art["source"] else ""
+
                 st.markdown(f"""
                 <div class="panel" style="margin-bottom:.6rem;">
                     <div class="panel-head" style="text-transform:none;font-size:.82rem;letter-spacing:0">
-                        {art["source"] + ' &nbsp;\u00b7&nbsp; ' if art["source"] else ""}<span style="color:#64748b;font-weight:400;">{art["title"][:90] + '\u2026' if len(art["title"]) > 90 else art["title"]}</span>
+                        {source_prefix}<span style="color:#64748b;font-weight:400;">{title_display}</span>
                     </div>
                     <div class="panel-body" style="margin-bottom:.75rem;font-size:.84rem;">
-                        {art["description"][:180] + '\u2026' if len(art["description"]) > 180 else art["description"] or "<em style='color:#334155'>No description available.</em>"}
+                        {desc_display}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
                 col_btn, col_res = st.columns([1, 3], gap="small")
                 with col_btn:
-                    if st.button("\ud83d\udd0e Analyze", key=f"live_analyze_{idx}", use_container_width=True):
+                    if st.button("🔎 Analyze", key=f"live_analyze_{idx}", use_container_width=True):
                         cleaned  = clean_text(art["text"])
                         vec_text = vectorizer.transform([cleaned])
                         pred     = model.predict(vec_text)[0]
@@ -874,7 +878,7 @@ with live_col:
                         lbl, conf_v = r["label"], r["conf"]
                         v_color = "#86efac" if lbl == "REAL" else "#fca5a5"
                         b_cls   = "badge-real" if lbl == "REAL" else "badge-fake"
-                        v_icon  = "\u2705" if lbl == "REAL" else "\ud83d\udea8"
+                        v_icon  = "✅" if lbl == "REAL" else "🚨"
                         st.markdown(f"""
                         <div style="display:flex;align-items:center;gap:.8rem;padding:.5rem 0">
                             <span class="verdict-badge {b_cls}" style="animation:none">{v_icon}&nbsp;{lbl}</span>
