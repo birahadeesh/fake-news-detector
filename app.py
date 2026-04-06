@@ -549,9 +549,8 @@ def gemini_credibility(client, article: str, label: str) -> str:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def fetch_latest_news() -> list[dict]:
+def fetch_latest_news(api_key: str) -> list[dict]:
     """Fetch top 5 headlines from NewsAPI (India). Cached for 60 s."""
-    api_key = os.environ.get("NEWS_API_KEY", "")
     if not api_key:
         return []
     try:
@@ -814,7 +813,13 @@ with live_col:
     </div>
     """, unsafe_allow_html=True)
 
-    news_api_available = bool(os.environ.get("NEWS_API_KEY", ""))
+    news_api_key = ""
+    try:
+        news_api_key = st.secrets.get("NEWS_API_KEY", "") or os.environ.get("NEWS_API_KEY", "")
+    except Exception:
+        news_api_key = os.environ.get("NEWS_API_KEY", "")
+
+    news_api_available = bool(news_api_key)
     if not news_api_available:
         st.info(
             "💡 **Live News disabled.** Set `NEWS_API_KEY` environment variable to enable real-time headline analysis.",
@@ -830,7 +835,7 @@ with live_col:
 
         if fetch_btn:
             with st.spinner("📡 Fetching latest headlines…"):
-                articles = fetch_latest_news()
+                articles = fetch_latest_news(news_api_key)
             if not articles:
                 st.warning("⚠️ Could not fetch news. Check your NEWS_API_KEY or try again shortly.", icon="⚠️")
             else:
