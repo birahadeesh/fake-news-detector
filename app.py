@@ -3,6 +3,8 @@ import re
 import string
 import time
 
+import requests
+
 import joblib
 import streamlit as st
 import streamlit.components.v1 as components
@@ -546,6 +548,38 @@ def gemini_credibility(client, article: str, label: str) -> str:
     return client.models.generate_content(model=GEMINI_MODEL, contents=prompt).text.strip()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_latest_news() -> list[dict]:
+    """Fetch top 5 headlines from NewsAPI (India). Cached for 60 s."""
+    api_key = os.environ.get("NEWS_API_KEY", "")
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            "https://newsapi.org/v2/top-headlines",
+            params={"country": "in", "pageSize": 5, "apiKey": api_key},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        articles = resp.json().get("articles", [])
+        result = []
+        for a in articles:
+            title = (a.get("title") or "").strip()
+            desc  = (a.get("description") or "").strip()
+            if not title:
+                continue
+            result.append({
+                "title": title,
+                "description": desc,
+                "text": f"{title}. {desc}".strip(),
+                "url": a.get("url", ""),
+                "source": (a.get("source") or {}).get("name", ""),
+            })
+        return result
+    except Exception:
+        return []
+
+
 model, vectorizer = load_model()
 gemini_client = get_gemini_client()
 
@@ -765,6 +799,84 @@ if analyze_btn:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+
+# ══ LIVE NEWS ANALYSIS ══════════════════════════════════
+_, live_col, _ = st.columns([0.5, 5, 0.5])
+with live_col:
+    st.markdown("<div class='glow-div'></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align:center;padding:1.2rem 0 1rem'>
+        <p style='font-size:1.45rem;font-weight:900;letter-spacing:-0.5px;
+                  background:linear-gradient(135deg,#bfdbfe 0%,#a5b4fc 50%,#c084fc 100%);
+                  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                  background-clip:text;margin-bottom:.3rem;'>📰 Live News Analysis</p>
+        <p style='font-size:.88rem;color:#475569;'>Fetch today’s top headlines and run instant credibility checks.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    news_api_available = bool(os.environ.get("NEWS_API_KEY", ""))
+    if not news_api_available:
+        st.info(
+            "💡 **Live News disabled.** Set `NEWS_API_KEY` environment variable to enable real-time headline analysis.",
+            icon="ℹ️",
+        )
+    else:
+        fetch_btn = st.button("🔄 Fetch Latest News", use_container_width=True)
+
+        if "live_articles" not in st.session_state:
+            st.session_state.live_articles = []
+        if "live_result" not in st.session_state:
+            st.session_state.live_result = {}
+
+        if fetch_btn:
+            with st.spinner("📡 Fetching latest headlines…"):
+                articles = fetch_latest_news()
+            if not articles:
+                st.warning("⚠️ Could not fetch news. Check your NEWS_API_KEY or try again shortly.", icon="⚠️")
+            else:
+                st.session_state.live_articles = articles
+                st.session_state.live_result   = {}
+
+        if st.session_state.live_articles:
+            st.markdown("<div class='sec-lbl' style='margin-bottom:.8rem'>Today’s Headlines</div>", unsafe_allow_html=True)
+            for idx, art in enumerate(st.session_state.live_articles):
+                with st.container():
+                    st.markdown(f"""
+                    <div class="panel" style="margin-bottom:.6rem;">
+                        <div class="panel-head" style="text-transform:none;font-size:.82rem;letter-spacing:0">
+                            {art["source"] + ' &nbsp;·&nbsp; ' if art["source"] else ""}<span style="color:#64748b;font-weight:400;">{art["title"][:80] + '…' if len(art["title"]) > 80 else art["title"]}</span>
+                        </div>
+                        <div class="panel-body" style="margin-bottom:.75rem;font-size:.84rem;">
+                            {art["description"][:160] + '…' if len(art["description"]) > 160 else art["description"] or "<em style='color:#334155'>No description available.</em>"}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    col_btn, col_res = st.columns([1, 3], gap="small")
+                    with col_btn:
+                        if st.button(f"🔎 Analyze", key=f"live_analyze_{idx}", use_container_width=True):
+                            cleaned  = clean_text(art["text"])
+                            vec_text = vectorizer.transform([cleaned])
+                            pred     = model.predict(vec_text)[0]
+                            proba    = model.predict_proba(vec_text)[0]
+                            lbl      = "REAL" if pred == 1 else "FAKE"
+                            conf_pct = proba[pred] * 100
+                            st.session_state.live_result[idx] = {"label": lbl, "conf": conf_pct}
+
+                    with col_res:
+                        if idx in st.session_state.live_result:
+                            r = st.session_state.live_result[idx]
+                            lbl, conf_v = r["label"], r["conf"]
+                            v_color = "#86efac" if lbl == "REAL" else "#fca5a5"
+                            b_cls   = "badge-real" if lbl == "REAL" else "badge-fake"
+                            v_icon  = "✅" if lbl == "REAL" else "🚨"
+                            st.markdown(f"""
+                            <div style="display:flex;align-items:center;gap:.8rem;padding:.5rem 0">
+                                <span class="verdict-badge {b_cls}" style="animation:none">{v_icon}&nbsp;{lbl}</span>
+                                <span style="font-family:'JetBrains Mono',monospace;font-size:.82rem;
+                                             font-weight:700;color:{v_color}">{conf_v:.1f}% confidence</span>
+                            </div>
+                            """, unsafe_allow_html=True)
 
 # ══ FOOTER ════════════════════════════════════════════════════════
 st.markdown("<div class='glow-div'></div>", unsafe_allow_html=True)
