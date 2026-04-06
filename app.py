@@ -788,24 +788,29 @@ if analyze_btn:
 
                 st.markdown("<div class='glow-div' style='margin:.5rem 0'></div>", unsafe_allow_html=True)
 
-                summary_html = summary if summary else "<span class='g-unavail'>\u26a0\ufe0f Gemini AI temporarily unavailable.</span>"
-                cred_html    = credibility if credibility else "<span class='g-unavail'>\u26a0\ufe0f Gemini AI temporarily unavailable.</span>"
+                summary_html = summary if summary else "<span class='g-unavail'>&#9888; Gemini AI temporarily unavailable.</span>"
+                cred_html    = credibility if credibility else "<span class='g-unavail'>&#9888; Gemini AI temporarily unavailable.</span>"
+                # Guard against any non-BMP characters in Gemini response that crash Python 3.13
+                def _safe(s: str) -> str:
+                    return re.sub(r'[\ud800-\udfff]', '', s) if s else s
+                summary_html = _safe(summary_html)
+                cred_html    = _safe(cred_html)
 
                 if gemini_client:
                     st.markdown(f"""
                     <div class="panel fade-in-up fade-delay-1">
-                        <div class="panel-head">\ud83d\udcdd Article Summary</div>
+                        <div class="panel-head">&#128221; Article Summary</div>
                         <div class="panel-body">{summary_html}</div>
                     </div>
                     <div class="panel fade-in-up fade-delay-2">
-                        <div class="panel-head">\ud83e\uddd0 Credibility Analysis</div>
+                        <div class="panel-head">&#129488; Credibility Analysis</div>
                         <div class="panel-body">{cred_html}</div>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="panel fade-in-up">
-                        <div class="panel-head">\ud83e\udd16 Gemini AI Insights</div>
+                        <div class="panel-head">&#129302; Gemini AI Insights</div>
                         <div class="panel-body" style="color:#334155">
                             Set <code style="color:#818cf8">GEMINI_API_KEY</code> to enable AI summaries and credibility analysis.
                         </div>
