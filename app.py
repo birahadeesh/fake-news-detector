@@ -548,35 +548,48 @@ def gemini_credibility(client, article: str, label: str) -> str:
     return client.models.generate_content(model=GEMINI_MODEL, contents=prompt).text.strip()
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def fetch_latest_news(api_key: str) -> list[dict]:
-    """Fetch top 5 headlines from NewsAPI (India). Cached for 60 s."""
-    if not api_key:
-        return []
-    try:
-        resp = requests.get(
-            "https://newsapi.org/v2/top-headlines",
-            params={"country": "in", "pageSize": 5, "apiKey": api_key},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        articles = resp.json().get("articles", [])
-        result = []
-        for a in articles:
-            title = (a.get("title") or "").strip()
-            desc  = (a.get("description") or "").strip()
-            if not title:
-                continue
-            result.append({
-                "title": title,
-                "description": desc,
-                "text": f"{title}. {desc}".strip(),
-                "url": a.get("url", ""),
-                "source": (a.get("source") or {}).get("name", ""),
-            })
-        return result
-    except Exception:
-        return []
+@st.cache_data(ttl=120, show_spinner=False)
+def fetch_latest_news() -> list[dict]:
+    """Fetch top 5 headlines from Indian news RSS feeds. No API key needed."""
+    import xml.etree.ElementTree as ET
+
+    RSS_FEEDS = [
+        ("NDTV",          "https://feeds.feedburner.com/ndtvnews-india-news"),
+        ("The Hindu",     "https://www.thehindu.com/news/national/feeder/default.rss"),
+        ("Times of India","https://timesofindia.indiatimes.com/rssfeeds/296589292.cms"),
+    ]
+    HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; FakeNewsDetector/1.0)"}
+    result = []
+
+    for source_name, url in RSS_FEEDS:
+        if len(result) >= 5:
+            break
+        try:
+            resp = requests.get(url, timeout=8, headers=HEADERS)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.content)
+            items = root.findall(".//item")
+            for item in items:
+                if len(result) >= 5:
+                    break
+                title = (item.findtext("title") or "").strip()
+                raw_desc = (item.findtext("description") or "").strip()
+                # Strip any HTML tags that may appear in RSS descriptions
+                desc = re.sub(r"<[^>]+>", "", raw_desc).strip()
+                link = (item.findtext("link") or "").strip()
+                if not title or "[Removed]" in title:
+                    continue
+                result.append({
+                    "title":       title,
+                    "description": desc[:220],
+                    "text":        f"{title}. {desc}".strip(),
+                    "url":         link,
+                    "source":      source_name,
+                })
+        except Exception:
+            continue   # try next feed
+
+    return result
 
 
 model, vectorizer = load_model()
@@ -775,31 +788,31 @@ if analyze_btn:
 
                 st.markdown("<div class='glow-div' style='margin:.5rem 0'></div>", unsafe_allow_html=True)
 
-                summary_html = summary if summary else "<span class='g-unavail'>⚠️ Gemini AI temporarily unavailable.</span>"
-                cred_html    = credibility if credibility else "<span class='g-unavail'>⚠️ Gemini AI temporarily unavailable.</span>"
+                summary_html = summary if summary else "<span class='g-unavail'>\u26a0\ufe0f Gemini AI temporarily unavailable.</span>"
+                cred_html    = credibility if credibility else "<span class='g-unavail'>\u26a0\ufe0f Gemini AI temporarily unavailable.</span>"
 
                 if gemini_client:
                     st.markdown(f"""
                     <div class="panel fade-in-up fade-delay-1">
-                        <div class="panel-head">📝 Article Summary</div>
+                        <div class="panel-head">\ud83d\udcdd Article Summary</div>
                         <div class="panel-body">{summary_html}</div>
                     </div>
                     <div class="panel fade-in-up fade-delay-2">
-                        <div class="panel-head">🧐 Credibility Analysis</div>
+                        <div class="panel-head">\ud83e\uddd0 Credibility Analysis</div>
                         <div class="panel-body">{cred_html}</div>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="panel fade-in-up">
-                        <div class="panel-head">🤖 Gemini AI Insights</div>
+                        <div class="panel-head">\ud83e\udd16 Gemini AI Insights</div>
                         <div class="panel-body" style="color:#334155">
                             Set <code style="color:#818cf8">GEMINI_API_KEY</code> to enable AI summaries and credibility analysis.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
-# ══ LIVE NEWS ANALYSIS ══════════════════════════════════
+# \u2550\u2550 LIVE NEWS ANALYSIS \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 _, live_col, _ = st.columns([0.5, 5, 0.5])
 with live_col:
     st.markdown("<div class='glow-div'></div>", unsafe_allow_html=True)
@@ -808,80 +821,67 @@ with live_col:
         <p style='font-size:1.45rem;font-weight:900;letter-spacing:-0.5px;
                   background:linear-gradient(135deg,#bfdbfe 0%,#a5b4fc 50%,#c084fc 100%);
                   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                  background-clip:text;margin-bottom:.3rem;'>📰 Live News Analysis</p>
-        <p style='font-size:.88rem;color:#475569;'>Fetch today’s top headlines and run instant credibility checks.</p>
+                  background-clip:text;margin-bottom:.3rem;'>\ud83d\udcf0 Live News Analysis</p>
+        <p style='font-size:.88rem;color:#475569;'>Fetch today\u2019s top headlines and run instant credibility checks.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    news_api_key = ""
-    try:
-        news_api_key = st.secrets.get("NEWS_API_KEY", "") or os.environ.get("NEWS_API_KEY", "")
-    except Exception:
-        news_api_key = os.environ.get("NEWS_API_KEY", "")
+    fetch_btn = st.button("\ud83d\udd04 Fetch Latest News", use_container_width=True)
 
-    news_api_available = bool(news_api_key)
-    if not news_api_available:
-        st.info(
-            "💡 **Live News disabled.** Set `NEWS_API_KEY` environment variable to enable real-time headline analysis.",
-            icon="ℹ️",
-        )
-    else:
-        fetch_btn = st.button("🔄 Fetch Latest News", use_container_width=True)
+    if "live_articles" not in st.session_state:
+        st.session_state.live_articles = []
+    if "live_result" not in st.session_state:
+        st.session_state.live_result = {}
 
-        if "live_articles" not in st.session_state:
-            st.session_state.live_articles = []
-        if "live_result" not in st.session_state:
-            st.session_state.live_result = {}
+    if fetch_btn:
+        with st.spinner("\ud83d\udce1 Pulling latest headlines from news feeds\u2026"):
+            articles = fetch_latest_news()
+        if not articles:
+            st.warning("\u26a0\ufe0f Could not fetch headlines right now. Please try again in a moment.", icon="\u26a0\ufe0f")
+        else:
+            st.session_state.live_articles = articles
+            st.session_state.live_result   = {}
 
-        if fetch_btn:
-            with st.spinner("📡 Fetching latest headlines…"):
-                articles = fetch_latest_news(news_api_key)
-            if not articles:
-                st.warning("⚠️ Could not fetch news. Check your NEWS_API_KEY or try again shortly.", icon="⚠️")
-            else:
-                st.session_state.live_articles = articles
-                st.session_state.live_result   = {}
-
-        if st.session_state.live_articles:
-            st.markdown("<div class='sec-lbl' style='margin-bottom:.8rem'>Today’s Headlines</div>", unsafe_allow_html=True)
-            for idx, art in enumerate(st.session_state.live_articles):
-                with st.container():
-                    st.markdown(f"""
-                    <div class="panel" style="margin-bottom:.6rem;">
-                        <div class="panel-head" style="text-transform:none;font-size:.82rem;letter-spacing:0">
-                            {art["source"] + ' &nbsp;·&nbsp; ' if art["source"] else ""}<span style="color:#64748b;font-weight:400;">{art["title"][:80] + '…' if len(art["title"]) > 80 else art["title"]}</span>
-                        </div>
-                        <div class="panel-body" style="margin-bottom:.75rem;font-size:.84rem;">
-                            {art["description"][:160] + '…' if len(art["description"]) > 160 else art["description"] or "<em style='color:#334155'>No description available.</em>"}
-                        </div>
+    if st.session_state.live_articles:
+        st.markdown("<div class='sec-lbl' style='margin-bottom:.8rem'>Today\u2019s Headlines</div>", unsafe_allow_html=True)
+        for idx, art in enumerate(st.session_state.live_articles):
+            with st.container():
+                st.markdown(f"""
+                <div class="panel" style="margin-bottom:.6rem;">
+                    <div class="panel-head" style="text-transform:none;font-size:.82rem;letter-spacing:0">
+                        {art["source"] + ' &nbsp;\u00b7&nbsp; ' if art["source"] else ""}<span style="color:#64748b;font-weight:400;">{art["title"][:90] + '\u2026' if len(art["title"]) > 90 else art["title"]}</span>
                     </div>
-                    """, unsafe_allow_html=True)
+                    <div class="panel-body" style="margin-bottom:.75rem;font-size:.84rem;">
+                        {art["description"][:180] + '\u2026' if len(art["description"]) > 180 else art["description"] or "<em style='color:#334155'>No description available.</em>"}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    col_btn, col_res = st.columns([1, 3], gap="small")
-                    with col_btn:
-                        if st.button(f"🔎 Analyze", key=f"live_analyze_{idx}", use_container_width=True):
-                            cleaned  = clean_text(art["text"])
-                            vec_text = vectorizer.transform([cleaned])
-                            pred     = model.predict(vec_text)[0]
-                            proba    = model.predict_proba(vec_text)[0]
-                            lbl      = "REAL" if pred == 1 else "FAKE"
-                            conf_pct = proba[pred] * 100
-                            st.session_state.live_result[idx] = {"label": lbl, "conf": conf_pct}
+                col_btn, col_res = st.columns([1, 3], gap="small")
+                with col_btn:
+                    if st.button("\ud83d\udd0e Analyze", key=f"live_analyze_{idx}", use_container_width=True):
+                        cleaned  = clean_text(art["text"])
+                        vec_text = vectorizer.transform([cleaned])
+                        pred     = model.predict(vec_text)[0]
+                        proba    = model.predict_proba(vec_text)[0]
+                        lbl      = "REAL" if pred == 1 else "FAKE"
+                        conf_pct = proba[pred] * 100
+                        st.session_state.live_result[idx] = {"label": lbl, "conf": conf_pct}
 
-                    with col_res:
-                        if idx in st.session_state.live_result:
-                            r = st.session_state.live_result[idx]
-                            lbl, conf_v = r["label"], r["conf"]
-                            v_color = "#86efac" if lbl == "REAL" else "#fca5a5"
-                            b_cls   = "badge-real" if lbl == "REAL" else "badge-fake"
-                            v_icon  = "✅" if lbl == "REAL" else "🚨"
-                            st.markdown(f"""
-                            <div style="display:flex;align-items:center;gap:.8rem;padding:.5rem 0">
-                                <span class="verdict-badge {b_cls}" style="animation:none">{v_icon}&nbsp;{lbl}</span>
-                                <span style="font-family:'JetBrains Mono',monospace;font-size:.82rem;
-                                             font-weight:700;color:{v_color}">{conf_v:.1f}% confidence</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                with col_res:
+                    if idx in st.session_state.live_result:
+                        r = st.session_state.live_result[idx]
+                        lbl, conf_v = r["label"], r["conf"]
+                        v_color = "#86efac" if lbl == "REAL" else "#fca5a5"
+                        b_cls   = "badge-real" if lbl == "REAL" else "badge-fake"
+                        v_icon  = "\u2705" if lbl == "REAL" else "\ud83d\udea8"
+                        st.markdown(f"""
+                        <div style="display:flex;align-items:center;gap:.8rem;padding:.5rem 0">
+                            <span class="verdict-badge {b_cls}" style="animation:none">{v_icon}&nbsp;{lbl}</span>
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:.82rem;
+                                         font-weight:700;color:{v_color}">{conf_v:.1f}% confidence</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
 # ══ FOOTER ════════════════════════════════════════════════════════
 st.markdown("<div class='glow-div'></div>", unsafe_allow_html=True)
